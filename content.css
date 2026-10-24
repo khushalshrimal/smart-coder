@@ -1,0 +1,41 @@
+/* Replicated from MCQ Extension (Stealth Pro) */
+#stealth-root {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  z-index: 2147483647 !important;
+  pointer-events: none !important;
+}
+
+#stealth-root[data-hidden="true"] {
+  display: none !important;
+}
+
+#box {
+  position: fixed !important;
+  top: 10px !important;
+  left: 10px !important;
+  transform: translateZ(9999px) !important;
+  background: rgba(0, 0, 0, 0.88) !important;
+  color: #00ffcc !important;
+  padding: 8px 12px !important;
+  font-size: 13px !important;
+  border-radius: 6px !important;
+  font-family: monospace !important;
+  pointer-events: auto !important;
+  max-width: min(680px, 92vw) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6) !important;
+  border: 1px solid rgba(0, 255, 204, 0.25) !important;
+}
+
+.loading {
+  color: yellow !important;
+}
+
+.success {
+  color: #00ffcc !important;
+}
+
+.error {
+  color: red !important;
+}

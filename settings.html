@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart-Coder Gemini - Settings</title>
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <div class="settings-layout">
+    <!-- Header -->
+    <header class="settings-header">
+      <div class="header-branding">
+        <img src="icons/icon48.png" alt="Logo" class="settings-logo">
+        <div>
+          <h1>Smart-Coder Gemini Settings</h1>
+          <p class="header-desc">Configure your Google Gemini API key and code generation parameters.</p>
+        </div>
+      </div>
+      <div id="saved-key-pill" class="key-pill pill-unknown">
+        <span class="status-dot"></span>
+        <span id="saved-key-label">Checking key status…</span>
+      </div>
+    </header>
+
+    <main class="settings-main">
+      <!-- Activation Status Banner -->
+      <div id="activation-banner" class="activation-banner banner-pending">
+        <div id="activation-icon" class="activation-icon">⚡</div>
+        <div class="activation-content">
+          <strong id="activation-headline">First-Time Setup (Alt + Shift + A)</strong>
+          <p id="activation-subtext">Enter your Google Gemini API key below and click <strong>Save &amp; Activate</strong>. Your key will be verified with the Gemini API before activation.</p>
+        </div>
+      </div>
+
+      <!-- Status Box for Save / Test feedback -->
+      <div id="status-card" class="status-card hidden" role="status">
+        <div id="status-icon" class="status-icon"></div>
+        <div class="status-content">
+          <h3 id="status-title">Status Title</h3>
+          <p id="status-message">Status details appear here.</p>
+        </div>
+      </div>
+
+      <!-- Section: API Credentials -->
+      <section class="config-card">
+        <div class="card-title-group">
+          <h2>1. Google Gemini API Key</h2>
+          <p class="field-hint">Your API key is stored locally in Chrome storage (<code>chrome.storage.local</code>). It is never sent to third-party servers.</p>
+        </div>
+
+        <div class="form-group">
+          <label for="api-key-input">API Key</label>
+          <div class="input-with-button">
+            <input
+              type="password"
+              id="api-key-input"
+              placeholder="Paste your Google Gemini API key (AIza...)"
+              autocomplete="off"
+              spellcheck="false"
+            >
+            <button type="button" id="toggle-key-visibility-btn" class="btn-toggle" title="Show/Hide API key">
+              <svg id="eye-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+              </svg>
+            </button>
+          </div>
+          <span class="field-subtext">Get your API key free from <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.</span>
+        </div>
+      </section>
+
+      <!-- Section: Model & Generation Parameters -->
+      <section class="config-card">
+        <div class="card-title-group">
+          <h2>2. Model & Generation Parameters</h2>
+          <p class="field-hint">Configure which Gemini model and generation settings to use for C++17 solutions.</p>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label for="model-select">Gemini Model</label>
+            <select id="model-select">
+              <option value="gemini-3.8-flash">gemini-3.8-flash (Recommended &amp; Fast)</option>
+              <option value="custom">Custom Model ID…</option>
+            </select>
+          </div>
+
+          <div id="custom-model-group" class="form-group flex-1 hidden">
+            <label for="custom-model-input">Custom Model ID</label>
+            <input type="text" id="custom-model-input" placeholder="e.g. gemini-3.8-flash">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group flex-1">
+            <label for="max-tokens-input">Max Output Tokens</label>
+            <input type="number" id="max-tokens-input" min="512" max="8192" step="256" value="2048">
+            <span class="field-subtext">Default: 2048 (sufficient for complex C++17 solutions).</span>
+          </div>
+
+          <div class="form-group flex-1">
+            <label for="temperature-input">Temperature (0.0 – 1.0)</label>
+            <input type="number" id="temperature-input" min="0.0" max="1.0" step="0.05" value="0.2">
+            <span class="field-subtext">Default: 0.2 (low temperature ensures deterministic, correct code).</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Action Buttons -->
+      <div class="settings-actions">
+        <button id="save-activate-btn" class="btn btn-save">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span id="save-activate-label">Save &amp; Activate</span>
+        </button>
+
+        <button id="test-btn" class="btn btn-test">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+          Test Connection
+        </button>
+
+        <button id="clear-btn" class="btn btn-danger">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+          Clear Key
+        </button>
+      </div>
+
+      <!-- Security & Usage Clarification Notice -->
+      <section class="info-callout">
+        <h3>Important Security &amp; Quota Information</h3>
+        <ul>
+          <li><strong>Client-Side Storage:</strong> An API key stored in a Chrome extension client is not a server-side secret. Do not use an enterprise master key; use a dedicated Gemini key with restricted access.</li>
+          <li><strong>Quota &amp; Billing Notice:</strong> A successful "Test Connection" verifies valid authentication and model endpoint availability. It does <em>not</em> imply unlimited free requests. Free-tier requests are subject to Google AI Studio's RPM (requests per minute) and TPM (tokens per minute) rate limits.</li>
+          <li><strong>Permitted Practice:</strong> This extension is intended strictly for permitted self-study and practice environments where external AI assistance is allowed.</li>
+        </ul>
+      </section>
+    </main>
+  </div>
+
+  <script src="settings.js"></script>
+</body>
+</html>

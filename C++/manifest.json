@@ -1,0 +1,69 @@
+{
+  "manifest_version": 3,
+  "name": "Smart-Coder Gemini",
+  "version": "1.0.0",
+  "description": "Permitted coding practice assistant generating C++17 solutions using Google Gemini API.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://generativelanguage.googleapis.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Smart-Coder Gemini",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "options_ui": {
+    "page": "settings.html",
+    "open_in_tab": true
+  },
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "commands": {
+    "activate-extension": {
+      "suggested_key": {
+        "default": "Alt+Shift+A"
+      },
+      "description": "First-time activation and Gemini API configuration"
+    },
+    "generate-solution": {
+      "suggested_key": {
+        "default": "Alt+Shift+G"
+      },
+      "description": "Generate C++17 solution for current problem"
+    },
+    "hide-panel": {
+      "suggested_key": {
+        "default": "Alt+Shift+H"
+      },
+      "description": "Hide solution side panel"
+    },
+    "restore-panel": {
+      "suggested_key": {
+        "default": "Alt+Shift+R"
+      },
+      "description": "Restore solution side panel"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
