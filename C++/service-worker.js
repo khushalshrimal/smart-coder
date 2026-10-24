@@ -42,8 +42,8 @@ let isGenerating = false;
  * Normalizes C++ response text:
  * 1. Strips Markdown fences (```cpp ... ```) without corrupting inner source code.
  * 2. When platform uses an online judge driver (e.g. GeeksforGeeks, LeetCode),
- *    strips redundant #include directives, "using namespace std;", explanatory comments,
- *    and unnecessary "std::" prefixes as required.
+ *    isolates class Solution, strips redundant #include directives, "using namespace std;",
+ *    explanatory comments, unnecessary "std::" prefixes, and any echoed problem/page text.
  */
 function normalizeCppCode(rawText, { isPlatformWithDriver = false } = {}) {
   if (!rawText || typeof rawText !== 'string') {
@@ -68,7 +68,41 @@ function normalizeCppCode(rawText, { isPlatformWithDriver = false } = {}) {
     }
   }
 
-  // 3. If target platform is an online judge with a driver (GFG, LeetCode), strip boilerplate
+  // 3. For online judge platforms (GFG, LeetCode) with a driver,
+  // isolate the exact class Solution (and any helper struct) and discard any echoed prompt/preamble/explanation.
+  if (isPlatformWithDriver && /class\s+Solution\b/.test(text)) {
+    const classIdx = text.search(/\bclass\s+Solution\b/);
+    if (classIdx !== -1) {
+      const beforeClass = text.substring(0, classIdx);
+      const helperMatch = beforeClass.match(/(?:(?:template\s*<[^>]+>\s*)?(?:struct|class)\s+[a-zA-Z0-9_]+\s*\{[\s\S]*?\}\s*;\s*)+$/);
+      const startIdx = helperMatch ? (classIdx - helperMatch[0].length) : classIdx;
+      text = text.substring(startIdx);
+
+      let braceCount = 0;
+      let inClass = false;
+      let endIdx = text.length;
+
+      for (let i = 0; i < text.length; i++) {
+        if (text.substring(i).startsWith('class Solution')) {
+          inClass = true;
+        }
+        if (inClass) {
+          if (text[i] === '{') {
+            braceCount++;
+          } else if (text[i] === '}') {
+            braceCount--;
+            if (braceCount === 0) {
+              endIdx = (text[i + 1] === ';') ? (i + 2) : (i + 1);
+              break;
+            }
+          }
+        }
+      }
+      text = text.substring(0, endIdx).trim();
+    }
+  }
+
+  // 4. If target platform is an online judge with a driver (GFG, LeetCode), strip boilerplate & comments
   if (isPlatformWithDriver) {
     const lines = text.split('\n');
     const filteredLines = [];
@@ -85,6 +119,10 @@ function normalizeCppCode(rawText, { isPlatformWithDriver = false } = {}) {
       }
       // Remove full-line comments (explanatory comments)
       if (trimmed.startsWith('//')) {
+        continue;
+      }
+      // Remove markdown headings if present
+      if (/^#{1,6}\s+/.test(trimmed)) {
         continue;
       }
       filteredLines.push(line);

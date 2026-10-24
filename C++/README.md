@@ -136,7 +136,7 @@ You will never be stuck without a way to configure your API key:
 4. **`Alt + Shift + R` — Restore Box:**
    - Restores the stealth box back in its original position on the webpage.
    - If a solution already exists for the current question, displays it immediately.
-   - If no solution has been generated yet, shows `Press Alt+Shift+G to solve` without triggering an automatic API request.
+   - If no solution has been generated yet, the box remains clean and hidden until Alt+Shift+G is invoked.
 
 ---
 

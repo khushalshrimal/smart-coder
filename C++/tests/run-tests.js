@@ -61,6 +61,40 @@ function normalizeCppCode(rawText, { isPlatformWithDriver = false } = {}) {
     }
   }
 
+  // For online judge platforms (GFG, LeetCode) with a driver,
+  // isolate the exact class Solution (and any helper struct) and discard any echoed prompt/preamble/explanation.
+  if (isPlatformWithDriver && /class\s+Solution\b/.test(text)) {
+    const classIdx = text.search(/\bclass\s+Solution\b/);
+    if (classIdx !== -1) {
+      const beforeClass = text.substring(0, classIdx);
+      const helperMatch = beforeClass.match(/(?:(?:template\s*<[^>]+>\s*)?(?:struct|class)\s+[a-zA-Z0-9_]+\s*\{[\s\S]*?\}\s*;\s*)+$/);
+      const startIdx = helperMatch ? (classIdx - helperMatch[0].length) : classIdx;
+      text = text.substring(startIdx);
+
+      let braceCount = 0;
+      let inClass = false;
+      let endIdx = text.length;
+
+      for (let i = 0; i < text.length; i++) {
+        if (text.substring(i).startsWith('class Solution')) {
+          inClass = true;
+        }
+        if (inClass) {
+          if (text[i] === '{') {
+            braceCount++;
+          } else if (text[i] === '}') {
+            braceCount--;
+            if (braceCount === 0) {
+              endIdx = (text[i + 1] === ';') ? (i + 2) : (i + 1);
+              break;
+            }
+          }
+        }
+      }
+      text = text.substring(0, endIdx).trim();
+    }
+  }
+
   if (isPlatformWithDriver) {
     const lines = text.split('\n');
     const filteredLines = [];
@@ -70,6 +104,7 @@ function normalizeCppCode(rawText, { isPlatformWithDriver = false } = {}) {
       if (trimmed.startsWith('#include')) continue;
       if (/^using\s+namespace\s+std\s*;/.test(trimmed)) continue;
       if (trimmed.startsWith('//')) continue;
+      if (/^#{1,6}\s+/.test(trimmed)) continue;
       filteredLines.push(line);
     }
 
@@ -537,6 +572,46 @@ async function main() {
     assert.ok(cleaned.includes('class Solution'), 'Must preserve class Solution');
     assert.ok(cleaned.includes('string reverseString(string& s)'), 'Must preserve exact signature');
     assert.ok(cleaned.includes('reverse(s.begin(), s.end());'), 'Must preserve implementation');
+  });
+
+  runTest('normalizeCppCode strips echoed prompt, page title, navigation tokens (Courses, Tutorials, Practice, Jobs), difficulty, and problem statement', () => {
+    const rawWithEchoedPage = [
+      'Rotate Array by One: Press Alt+Shift+G',
+      'Courses, Tutorials, Practice, Jobs',
+      'Difficulty: Easy',
+      'Given an array arr[], rotate the array by one position in clock-wise direction.',
+      'Examples: Input: arr[] = [1, 2, 3, 4, 5]',
+      '```cpp',
+      '#include <vector>',
+      'using namespace std;',
+      'class Solution {',
+      '  public:',
+      '    void rotate(vector<int> &arr) {',
+      '        if (arr.empty()) return;',
+      '        int last = arr.back();',
+      '        arr.pop_back();',
+      '        arr.insert(arr.begin(), last);',
+      '    }',
+      '};',
+      '```',
+      'Hope this solves Rotate Array by One!'
+    ].join('\n');
+
+    const cleaned = normalizeCppCode(rawWithEchoedPage, { isPlatformWithDriver: true });
+    assert.ok(!cleaned.includes('Courses'), 'Must NOT contain Courses');
+    assert.ok(!cleaned.includes('Tutorials'), 'Must NOT contain Tutorials');
+    assert.ok(!cleaned.includes('Practice'), 'Must NOT contain Practice');
+    assert.ok(!cleaned.includes('Jobs'), 'Must NOT contain Jobs');
+    assert.ok(!cleaned.includes('Difficulty: Easy'), 'Must NOT contain Difficulty');
+    assert.ok(!cleaned.includes('Rotate Array by One'), 'Must NOT contain problem title');
+    assert.ok(!cleaned.includes('Press Alt+Shift+G'), 'Must NOT contain shortcut prompt');
+    assert.ok(!cleaned.includes('Given an array arr[]'), 'Must NOT contain problem statement');
+    assert.ok(!cleaned.includes('Hope this solves'), 'Must NOT contain trailing explanation');
+    assert.ok(!cleaned.includes('#include'), 'Must NOT contain #include');
+    assert.ok(!cleaned.includes('using namespace std;'), 'Must NOT contain using namespace std;');
+    assert.ok(cleaned.includes('class Solution'), 'Must contain class Solution');
+    assert.ok(cleaned.includes('void rotate(vector<int> &arr)'), 'Must contain exact signature');
+    assert.ok(cleaned.includes('arr.insert(arr.begin(), last);'), 'Must contain valid implementation');
   });
 
   runTest('normalizeCppCode preserves #include when platform does not have driver', () => {
@@ -1187,6 +1262,21 @@ async function main() {
     assert.ok(demoHtml.includes('problem-statement'), 'Demo page must include problem statement container');
   });
 
+  runTest('Local demo page demo/rotate-array-sample.html exists and contains realistic GFG navigation, difficulty, and editor', () => {
+    const demoPath = path.join(ROOT_DIR, 'demo', 'rotate-array-sample.html');
+    assert.ok(fs.existsSync(demoPath), 'demo/rotate-array-sample.html must exist');
+    const demoHtml = fs.readFileSync(demoPath, 'utf8');
+
+    assert.ok(demoHtml.includes('Rotate Array by One'), 'Must contain title');
+    assert.ok(demoHtml.includes('Courses'), 'Must contain Courses navigation link');
+    assert.ok(demoHtml.includes('Tutorials'), 'Must contain Tutorials navigation link');
+    assert.ok(demoHtml.includes('Practice'), 'Must contain Practice navigation link');
+    assert.ok(demoHtml.includes('Jobs'), 'Must contain Jobs navigation link');
+    assert.ok(demoHtml.includes('Difficulty: Easy'), 'Must contain Difficulty badge');
+    assert.ok(demoHtml.includes('problems_problem_content__Xm_eO'), 'Must contain problem description container');
+    assert.ok(demoHtml.includes('void rotate(vector<int> &amp;arr)'), 'Must contain Monaco editor template with rotate signature');
+  });
+
   runTest('Diagnostic logging strips sensitive fields (api keys, prompt, fullText)', () => {
     function sanitizeForDiagnostic(data) {
       const sanitized = { ...data };
@@ -1377,32 +1467,75 @@ async function main() {
     assert.strictEqual(cache.has('problem1'), true, 'Cached solution must remain intact');
   });
 
-  runTest('Restore panel shortcut (Alt+Shift+R): unhides panel and shows solution or prompt without extra API call', () => {
+  runTest('Restore panel shortcut (Alt+Shift+R): restores cached solution without extra API call and stays hidden if unsolved', () => {
     let isPanelHidden = true;
     let apiCallMade = false;
     const cache = new Map();
 
     function onRestoreShortcut(problemHash) {
-      isPanelHidden = false;
       if (cache.has(problemHash)) {
+        isPanelHidden = false;
         return { hasSolution: true, code: cache.get(problemHash) };
       }
-      // Must NOT call API automatically
-      return { hasSolution: false, message: 'Press Alt+Shift+G to generate a solution' };
+      // Must NOT show visible prompt or call API automatically; remains hidden
+      isPanelHidden = true;
+      return { hasSolution: false, isHidden: true };
     }
 
     // Unsolved question
     const res1 = onRestoreShortcut('leetcode:new-problem:100');
-    assert.strictEqual(isPanelHidden, false);
+    assert.strictEqual(isPanelHidden, true, 'Panel must remain hidden when unsolved question is restored');
     assert.strictEqual(apiCallMade, false, 'Restoring panel must not make automatic API call');
     assert.strictEqual(res1.hasSolution, false);
-    assert.ok(res1.message.includes('Alt+Shift+G'));
 
     // Solved question
     cache.set('leetcode:solved-problem:200', 'class Solution {};');
     const res2 = onRestoreShortcut('leetcode:solved-problem:200');
+    assert.strictEqual(isPanelHidden, false);
     assert.strictEqual(res2.hasSolution, true);
     assert.strictEqual(res2.code, 'class Solution {};');
+  });
+
+  runTest('content.js contains zero occurrences of default prompt "Press Alt+Shift+G to solve"', () => {
+    const contentJsPath = path.join(ROOT_DIR, 'content.js');
+    const contentCode = fs.readFileSync(contentJsPath, 'utf8');
+    assert.strictEqual(
+      contentCode.includes('Press Alt+Shift+G to solve'),
+      false,
+      'content.js must not contain "Press Alt+Shift+G to solve"'
+    );
+  });
+
+  runTest('content.js does not inject or create stealth-root overlay on initial boot', () => {
+    const contentJsPath = path.join(ROOT_DIR, 'content.js');
+    const contentCode = fs.readFileSync(contentJsPath, 'utf8');
+
+    // Initial boot section must NOT call ensureStealthBoxCreated
+    const bootMatch = contentCode.match(/\/\/ Initial Boot[\s\S]*?\n\s*\}\)\(\);/);
+    assert.ok(bootMatch, 'Initial Boot section must exist');
+    assert.strictEqual(
+      bootMatch[0].includes('ensureStealthBoxCreated()'),
+      false,
+      'Initial boot must NOT call ensureStealthBoxCreated()'
+    );
+    assert.strictEqual(
+      bootMatch[0].includes('syncQuestionMetadata'),
+      false,
+      'Initial boot must NOT trigger syncQuestionMetadata'
+    );
+  });
+
+  runTest('content.js cleans up stale stealth-root DOM elements on script load', () => {
+    const contentJsPath = path.join(ROOT_DIR, 'content.js');
+    const contentCode = fs.readFileSync(contentJsPath, 'utf8');
+    assert.ok(
+      contentCode.includes('document.getElementById(\'stealth-root\')'),
+      'Must check for existing stealth-root'
+    );
+    assert.ok(
+      contentCode.includes('staleRoot.remove()'),
+      'Must proactively remove stale root element'
+    );
   });
 
   runTest('Generate shortcut (Alt+Shift+G): detects new question, generates C++17, and handles progress states', async () => {
@@ -1450,18 +1583,27 @@ async function main() {
     assert.deepStrictEqual(states, ['ready']);
   });
 
-  runTest('Stealth box CSS rules faithfully replicate original MCQ box properties', () => {
+  runTest('Stealth box CSS rules provide uniform overlay transparency (opacity: 0.55) with glassmorphic background and backdrop blur', () => {
     const cssPath = path.join(ROOT_DIR, 'content.css');
     assert.ok(fs.existsSync(cssPath), 'content.css must exist');
     const css = fs.readFileSync(cssPath, 'utf8');
 
-    assert.ok(css.includes('rgba(0, 0, 0, 0.85)'), 'Must match original background: rgba(0, 0, 0, 0.85)');
-    assert.ok(css.includes('padding: 6px 10px'), 'Must match original padding: 6px 10px');
-    assert.ok(css.includes('font-size: 14px'), 'Must match original font-size: 14px');
-    assert.ok(css.includes('font-weight: bold'), 'Must match original font-weight: bold');
-    assert.ok(css.includes('color: #00ffcc'), 'Must match original color: #00ffcc');
-    assert.ok(css.includes('color: yellow'), 'Must match original .loading color: yellow');
-    assert.ok(css.includes('color: red'), 'Must match original .error color: red');
+    const contentJsPath = path.join(ROOT_DIR, 'content.js');
+    const contentJs = fs.readFileSync(contentJsPath, 'utf8');
+
+    assert.ok(css.includes('opacity: 0.55'), 'content.css must apply opacity: 0.55 uniformly on #box container');
+    assert.ok(contentJs.includes('opacity: 0.55'), 'content.js Shadow DOM must apply opacity: 0.55 uniformly on #box container');
+    assert.ok(css.includes('rgba(15, 15, 15, 0.60)'), 'content.css must use semi-transparent background rgba(15, 15, 15, 0.60)');
+    assert.ok(contentJs.includes('rgba(15, 15, 15, 0.60)'), 'content.js Shadow DOM must use semi-transparent background rgba(15, 15, 15, 0.60)');
+    assert.ok(css.includes('backdrop-filter: blur'), 'content.css must include backdrop-filter blur');
+    assert.ok(contentJs.includes('backdrop-filter: blur'), 'content.js must include backdrop-filter blur');
+
+    assert.ok(css.includes('padding: 6px 10px'), 'Must preserve padding: 6px 10px');
+    assert.ok(css.includes('font-size: 14px'), 'Must preserve font-size: 14px');
+    assert.ok(css.includes('font-weight: bold'), 'Must preserve font-weight: bold');
+    assert.ok(css.includes('color: #00ffcc'), 'Must preserve text color: #00ffcc');
+    assert.ok(css.includes('color: yellow'), 'Must preserve .loading color: yellow');
+    assert.ok(css.includes('color: red'), 'Must preserve .error color: red');
   });
 
   runTest('Settings failure category mapper translates errors into distinct informative UI titles without blanket failure message', () => {

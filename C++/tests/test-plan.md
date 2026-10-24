@@ -103,7 +103,7 @@ node tests/run-tests.js
 4. Press `Alt+Shift+R`.
 5. Verify the side panel is restored and the previous solution is displayed immediately.
 6. Navigate to a new problem in LeetCode/GFG without reloading the page.
-7. Press `Alt+Shift+R`: verify it shows `Press Alt+Shift+G to generate a solution` without making an unsolicited API call.
+7. Press `Alt+Shift+R`: verify it does not show any unwanted prompt or make an unsolicited API call.
 8. Press `Alt+Shift+G`: verify it extracts the new problem and generates its solution.
 
 ### Scenario D: Edge Cases & Chrome Shortcut Conflicts

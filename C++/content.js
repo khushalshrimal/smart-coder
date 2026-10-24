@@ -19,6 +19,12 @@
   }
   window.__SMART_CODER_GEMINI_ACTIVE__ = true;
 
+  // Clean up any stale injected root from previous injections/reloads
+  const staleRoot = document.getElementById('stealth-root');
+  if (staleRoot) {
+    try { staleRoot.remove(); } catch {}
+  }
+
   /**
    * Safe diagnostic logger for content script operations.
    * NEVER logs API keys, private tokens, or user data.
@@ -274,17 +280,14 @@
   }
 
   function extractGFGProblem() {
-    // 1. Title extraction from live DOM headings
-    const titleEl = document.querySelector('div[class*="problems_header_content__title"]') ||
-      document.querySelector('div[class*="problems_header_content"] h3') ||
-      document.querySelector('div[class*="problems_header_content"]') ||
-      document.querySelector('.problem-tab__name, [class*="problem-tab__name"]') ||
-      document.querySelector('.problem-heading, [class*="problem-heading"]') ||
-      document.querySelector('h3.g-m-0, [class*="g-m-0"]') ||
-      document.querySelector('h3.header, h2.header, h1.header') ||
-      document.querySelector('h3, h2, h1');
+    // 1. Title extraction from specific DOM heading elements (avoiding full header wrappers)
+    const titleEl = document.querySelector('div[class*="problems_header_content"] h3, div[class*="problems_header_content__title"] h1, div[class*="problems_header_content__title"] h2, div[class*="problems_header_content__title"] h3, h3.g-m-0, .problem-tab__name, [class*="problem-tab__name"], .problem-heading');
 
-    let title = getSafeText(titleEl);
+    let title = '';
+    if (titleEl) {
+      const sub = titleEl.matches('h1, h2, h3, h4') ? titleEl : titleEl.querySelector('h1, h2, h3, h4');
+      title = getSafeText(sub || titleEl);
+    }
 
     // 2. Parse __NEXT_DATA__ JSON script for embedded Next.js problem state
     let nextDataProblem = null;
@@ -299,18 +302,25 @@
       } catch {}
     }
 
-    if (!title && nextDataProblem?.problem_name) {
-      title = nextDataProblem.problem_name;
+    if (!title || /\b(Courses|Tutorials|Practice|Jobs)\b/i.test(title)) {
+      if (nextDataProblem?.problem_name) {
+        title = nextDataProblem.problem_name;
+      } else {
+        const slugMatch = window.location.pathname.match(/\/problems\/([^/?#]+)/) ||
+          window.location.pathname.match(/\/problem\/([^/?#]+)/);
+        if (slugMatch) {
+          title = slugMatch[1].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        } else if (document.title) {
+          title = document.title.split('|')[0].split('-')[0].trim();
+        }
+      }
     }
 
-    if (!title) {
-      const slugMatch = window.location.pathname.match(/\/problems\/([^/?#]+)/) ||
-        window.location.pathname.match(/\/problem\/([^/?#]+)/);
-      if (slugMatch) {
-        title = slugMatch[1].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      } else if (document.title) {
-        title = document.title.split('|')[0].split('-')[0].trim();
-      }
+    if (title) {
+      title = title.replace(/\b(Courses|Tutorials|Practice|Jobs)\b/gi, '')
+                   .replace(/\bDifficulty\s*:\s*\w+/gi, '')
+                   .replace(/\bAccuracy\s*:\s*[\d.]+%?/gi, '')
+                   .trim();
     }
 
     // 3. Extract content from DOM:
@@ -636,7 +646,12 @@
           top: 10px;
           left: 10px;
           transform: translateZ(9999px);
-          background: rgba(0, 0, 0, 0.85);
+          opacity: 0.55;
+          background: rgba(15, 15, 15, 0.60);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          border: 1px solid rgba(0, 255, 204, 0.25);
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
           color: #00ffcc;
           padding: 6px 10px;
           font-size: 14px;
@@ -740,10 +755,10 @@
 
       const box = document.createElement('div');
       box.id = 'box';
-      box.className = 'success';
+      box.className = 'loading';
       box.innerHTML = `
         <div class="stealth-header">
-          <span id="status-badge" class="success">Press Alt+Shift+G to solve</span>
+          <span id="status-badge" class="loading"></span>
           <div id="action-controls" class="stealth-actions hidden">
             <span id="copy-btn" class="stealth-btn" title="Copy C++17 Solution">[Copy]</span>
             <span id="hide-btn" class="stealth-btn" title="Hide Box (Alt+Shift+H)">[✕]</span>
@@ -778,7 +793,7 @@
 
     copyBtn.addEventListener('click', async () => {
       const rawCode = codeView.getAttribute('data-raw-code') || codeView.textContent;
-      if (!rawCode || rawCode.startsWith('// Press Alt+Shift+G')) {
+      if (!rawCode) {
         return;
       }
 
@@ -823,7 +838,7 @@
     statusBadge.className = type;
   }
 
-  function displaySolutionInBox(title, code) {
+  function displaySolutionInBox(code) {
     ensureStealthBoxCreated();
     const statusBadge = shadowRoot.getElementById('status-badge');
     const actionControls = shadowRoot.getElementById('action-controls');
@@ -831,7 +846,7 @@
     const codeView = shadowRoot.getElementById('code-view');
 
     boxEl.className = 'success';
-    statusBadge.textContent = title ? `⚡ ${title} (C++17 Ready)` : '⚡ C++17 Solution Ready';
+    statusBadge.textContent = '⚡ C++17 Solution';
     statusBadge.className = 'success';
 
     codeView.setAttribute('data-raw-code', code);
@@ -842,30 +857,33 @@
   }
 
   function hideStealthBox() {
-    ensureStealthBoxCreated();
     isBoxHidden = true;
-    stealthRoot.style.display = 'none';
-    stealthRoot.setAttribute('data-hidden', 'true');
+    if (stealthRoot) {
+      stealthRoot.style.display = 'none';
+      stealthRoot.setAttribute('data-hidden', 'true');
+    }
   }
 
   function restoreStealthBox() {
-    ensureStealthBoxCreated();
-    isBoxHidden = false;
-    stealthRoot.removeAttribute('data-hidden');
-    stealthRoot.style.display = 'block';
+    const problem = extractProblem();
+    if (problem) {
+      currentProblem = problem;
+    }
 
-    // Sync question detection without making API call
-    syncQuestionMetadata();
-
-    // If solution exists for this problem, show it; else prompt
+    // Only restore if a solution has already been generated and cached for this problem
     if (currentProblem && solutionCache.has(currentProblem.hash)) {
-      displaySolutionInBox(currentProblem.title, solutionCache.get(currentProblem.hash));
+      ensureStealthBoxCreated();
+      isBoxHidden = false;
+      stealthRoot.removeAttribute('data-hidden');
+      stealthRoot.style.display = 'block';
+      displaySolutionInBox(solutionCache.get(currentProblem.hash));
     } else {
-      updateStatus(currentProblem ? `⚡ ${currentProblem.title}: Press Alt+Shift+G` : 'Press Alt+Shift+G to solve', 'success');
-      const codeBox = shadowRoot.getElementById('code-box');
-      const codeView = shadowRoot.getElementById('code-view');
-      if (codeView) codeView.removeAttribute('data-raw-code');
-      if (codeBox) codeBox.classList.add('hidden');
+      // If no solution has been generated yet, do NOT create or show any UI or prompt
+      isBoxHidden = true;
+      if (stealthRoot) {
+        stealthRoot.style.display = 'none';
+        stealthRoot.setAttribute('data-hidden', 'true');
+      }
     }
   }
 
@@ -874,12 +892,13 @@
     if (problem) {
       currentProblem = problem;
       if (solutionCache.has(problem.hash)) {
-        displaySolutionInBox(problem.title, solutionCache.get(problem.hash));
-      } else {
-        updateStatus(`⚡ ${problem.title}: Press Alt+Shift+G`, 'success');
+        if (!isBoxHidden && stealthRoot) {
+          displaySolutionInBox(solutionCache.get(problem.hash));
+        }
+      } else if (stealthRoot && !isBoxHidden) {
+        // Navigated to an unsolved problem; hide the box rather than showing a prompt
+        hideStealthBox();
       }
-    } else {
-      updateStatus('Press Alt+Shift+G to solve', 'success');
     }
   }
 
@@ -916,28 +935,16 @@
     // Check session cache first
     if (solutionCache.has(problem.hash)) {
       const cached = solutionCache.get(problem.hash);
-      displaySolutionInBox(problem.title, cached);
+      displaySolutionInBox(cached);
       lastSolvedHash = problem.hash;
       return;
     }
 
-    // Progress State: ... -> ... Reading question -> ... Generating C++17
+    // Progress State: minimal "Generating..." while waiting (Requirement 5)
     isGenerating = true;
-    updateStatus('...', 'loading');
+    updateStatus('Generating...', 'loading');
 
     try {
-      setTimeout(() => {
-        if (isGenerating) {
-          updateStatus('... Reading question', 'loading');
-        }
-      }, 300);
-
-      setTimeout(() => {
-        if (isGenerating) {
-          updateStatus('... Generating C++17', 'loading');
-        }
-      }, 800);
-
       if (!chrome.runtime || !chrome.runtime.sendMessage) {
         throw new Error('Extension context invalidated. Please refresh the page.');
       }
@@ -977,7 +984,7 @@
       solutionCache.set(problem.hash, solutionCode);
       lastSolvedHash = problem.hash;
 
-      displaySolutionInBox(problem.title, solutionCode);
+      displaySolutionInBox(solutionCode);
     } catch (err) {
       updateStatus(`Error: ${err.message || 'Generation error'}`, 'error');
     } finally {
@@ -1135,10 +1142,10 @@
   // ---------------------------------------------------------------------------
   // Initial Boot
   // ---------------------------------------------------------------------------
+  // Do NOT create or display any overlay on page load.
+  // The overlay is only created on demand when the user invokes the keyboard shortcut.
   const platform = getPlatformInfo();
   if (platform) {
-    ensureStealthBoxCreated();
-    // Silently detect metadata without making unsolicited Gemini API calls
-    setTimeout(syncQuestionMetadata, 600);
+    logDiagnostic('PAGE_READY', { platform: platform.name });
   }
 })();

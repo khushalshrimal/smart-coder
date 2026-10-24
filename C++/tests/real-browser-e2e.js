@@ -347,37 +347,31 @@ Output: [0,1]</pre>
     }
     await sleep(750);
 
-    // 2.1 Verify Stealth Box Injected into Shadow DOM & Problem Detected
-    const panelVerify = await pageClient.send('Runtime.evaluate', {
+    // 2.1 Verify Initial Page Load: Absolutely No Visible Overlay, Placeholder or Prompt Text
+    const initialVerify = await pageClient.send('Runtime.evaluate', {
       expression: `(() => {
         const root = document.getElementById('stealth-root');
-        if (!root || !root.shadowRoot) return { injected: false };
-        const shadow = root.shadowRoot;
-        const box = shadow.getElementById('box');
-        const statusBadge = shadow.getElementById('status-badge');
+        const visibleOverlay = Boolean(root && root.style.display !== 'none');
+        const anyPrompt = document.body.innerText.includes('Press Alt+Shift+G to solve');
         return {
-          injected: true,
-          hasBox: Boolean(box),
-          statusText: statusBadge ? statusBadge.textContent : '',
-          boxClass: box ? box.className : ''
+          rootExists: Boolean(root),
+          visibleOverlay,
+          anyPrompt
         };
       })()`,
       returnByValue: true
     });
 
-    const pv = panelVerify.result.value;
-    if (pv.injected && pv.hasBox) {
-      pass('Stealth Box (#stealth-root / #box) Injected in Real Chrome', `Status: "${pv.statusText}"`);
+    const iv = initialVerify.result.value;
+    if (!iv.rootExists && !iv.visibleOverlay && !iv.anyPrompt) {
+      pass('Initial Page Load: Absolutely No Extension Overlay, Banner, or Prompt Text Rendered');
     } else {
-      fail('Stealth Box (#stealth-root / #box) Injected', JSON.stringify(pv));
+      fail('Initial Page Load Cleanliness', JSON.stringify(iv));
     }
 
-    // 2.2 Test Shortcut Alt + Shift + G: Trigger Generation & Progress States
+    // 2.2 Test Shortcut Alt + Shift + G: Creates Stealth Box on Demand & Displays C++17 Solution
     const genShortcutTest = await pageClient.send('Runtime.evaluate', {
       expression: `(async () => {
-        const root = document.getElementById('stealth-root');
-        const shadow = root.shadowRoot;
-
         // Dispatch Alt + Shift + G in Chrome page
         window.dispatchEvent(new KeyboardEvent('keydown', {
           key: 'G',
@@ -388,17 +382,20 @@ Output: [0,1]</pre>
 
         // Catch intermediate reading / generating state
         await new Promise(r => setTimeout(r, 60));
-        const statusReading = shadow.getElementById('status-badge').textContent;
-        const statusClassReading = shadow.getElementById('status-badge').className;
+        const root = document.getElementById('stealth-root');
+        const shadow = root ? root.shadowRoot : null;
+        const statusReading = shadow?.getElementById('status-badge')?.textContent || '';
+        const statusClassReading = shadow?.getElementById('status-badge')?.className || '';
 
         // Wait for generation response
         await new Promise(r => setTimeout(r, 450));
-        const statusReady = shadow.getElementById('status-badge').textContent;
-        const codeView = shadow.getElementById('code-view');
-        const codeHtml = codeView.innerHTML;
-        const rawCode = codeView.getAttribute('data-raw-code');
+        const statusReady = shadow?.getElementById('status-badge')?.textContent || '';
+        const codeView = shadow?.getElementById('code-view');
+        const codeHtml = codeView?.innerHTML || '';
+        const rawCode = codeView?.getAttribute('data-raw-code') || '';
 
         return {
+          rootCreated: Boolean(root),
           statusReading,
           statusClassReading,
           statusReady,
@@ -411,10 +408,40 @@ Output: [0,1]</pre>
     });
 
     const gv = genShortcutTest.result.value;
-    if (gv.hasRawCode && gv.syntaxHighlighted && gv.statusReady.includes('Ready')) {
-      pass('Shortcut Alt + Shift + G: Generation Progress & C++17 Solution Displayed in Stealth Box');
+    if (gv.rootCreated && gv.hasRawCode && gv.syntaxHighlighted && gv.statusReady.includes('C++17 Solution')) {
+      pass('Shortcut Alt + Shift + G: Creates Overlay on Demand & Displays Pure C++17 Solution');
     } else {
       fail('Shortcut Alt + Shift + G: Generation Workflow', JSON.stringify(gv));
+    }
+
+    // 2.2b Verify Code Box Glassmorphic Styling: Uniform 0.55 Container Opacity
+    const styleVerify = await pageClient.send('Runtime.evaluate', {
+      expression: `(() => {
+        const root = document.getElementById('stealth-root');
+        const shadow = root ? root.shadowRoot : null;
+        const box = shadow ? shadow.getElementById('box') : null;
+        if (!box) return { found: false };
+        const cs = window.getComputedStyle(box);
+        return {
+          found: true,
+          backgroundColor: cs.backgroundColor,
+          backdropFilter: cs.backdropFilter || cs.webkitBackdropFilter || '',
+          opacity: Math.round(parseFloat(cs.opacity) * 100) / 100,
+          color: cs.color
+        };
+      })()`,
+      returnByValue: true
+    });
+
+    const sv = styleVerify.result.value;
+    if (
+      sv.found &&
+      sv.backgroundColor.includes('rgba(15, 15, 15, 0.6') &&
+      sv.opacity === 0.55
+    ) {
+      pass('Overlay Styling: Uniform Container Opacity (opacity: 0.55), Semi-Transparent Background & Backdrop Blur', `Opacity: ${sv.opacity}, BG: ${sv.backgroundColor}`);
+    } else {
+      fail('Overlay Styling', JSON.stringify(sv));
     }
 
     // 2.3 Test Copy Code Button
@@ -519,19 +546,28 @@ Output: [0,1]</pre>
             <p>You are given a string <code>s</code>. You need to reverse the string.</p>
             <pre>Input: s = \"Geeks\"\\nOutput: \"skeeG\"</pre>
           </div>
+          <div class=\"monaco-editor\" id=\"code-editor\">
+            <div class=\"view-lines\">
+              <div class=\"view-line\"><span>class Solution { public: string reverseString(string& s) { } };</span></div>
+            </div>
+          </div>
         \`;
         
         await new Promise(r => setTimeout(r, 400));
 
-        // Trigger keyboard shortcut Alt+Shift+R to re-sync
-        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'R', altKey: true, shiftKey: true, bubbles: true }));
-        await new Promise(r => setTimeout(r, 100));
+        let extracted = null;
+        if (window.__msgListener) {
+          window.__msgListener({ action: 'EXTRACT_PROBLEM_TEXT' }, {}, (resp) => {
+            extracted = resp;
+          });
+        }
 
         const root = document.getElementById('stealth-root');
-        const shadow = root.shadowRoot;
-        const statusText = shadow.getElementById('status-badge').textContent;
+        const shadow = root ? root.shadowRoot : null;
+        const statusText = shadow?.getElementById('status-badge')?.textContent || '';
         return {
-          title: statusText
+          extractedTitle: extracted?.title || '',
+          statusBadge: statusText
         };
       })()`,
       awaitPromise: true,
@@ -539,8 +575,8 @@ Output: [0,1]</pre>
     });
 
     const gfgVal = gfgTest.result.value;
-    if (gfgVal.title.includes('Reverse a String')) {
-      pass('GeeksforGeeks Problem Extractor: Correctly Parses Modern Dynamic Class (__Xm_eO)', gfgVal.title);
+    if (gfgVal.extractedTitle.includes('Reverse a String') && !gfgVal.statusBadge.includes('Reverse a String')) {
+      pass('GeeksforGeeks Problem Extractor: Correctly Parses Modern Dynamic Class (__Xm_eO) Without Leaking Title to Overlay', gfgVal.extractedTitle);
     } else {
       fail('GeeksforGeeks Problem Extractor', JSON.stringify(gfgVal));
     }
@@ -597,8 +633,8 @@ Output: [0,1]</pre>
     // Verify extraction on demo page
     const demoExtTest = await demoClient.send('Runtime.evaluate', {
       expression: `(async () => {
-        const root = document.getElementById('stealth-root');
-        const shadow = root?.shadowRoot;
+        // Assert initial state: absolutely no overlay before shortcut
+        const rootBefore = document.getElementById('stealth-root');
 
         // Trigger generation with Alt+Shift+G
         window.dispatchEvent(new KeyboardEvent('keydown', {
@@ -610,11 +646,14 @@ Output: [0,1]</pre>
 
         await new Promise(r => setTimeout(r, 400));
 
+        const root = document.getElementById('stealth-root');
+        const shadow = root ? root.shadowRoot : null;
         const statusBadge = shadow?.getElementById('status-badge')?.textContent || '';
         const codeView = shadow?.getElementById('code-view');
         const rawCode = codeView?.getAttribute('data-raw-code') || '';
 
         return {
+          wasNullBefore: rootBefore === null,
           statusBadge,
           hasReverseCode: rawCode.includes('reverseString')
         };
@@ -624,8 +663,8 @@ Output: [0,1]</pre>
     });
 
     const dVal = demoExtTest.result.value;
-    if (dVal.hasReverseCode && dVal.statusBadge.includes('Ready')) {
-      pass('Local Demo Page (demo/sample-problem.html): Extracted & Generated Solution Successfully');
+    if (dVal.wasNullBefore && dVal.hasReverseCode && dVal.statusBadge.includes('C++17 Solution')) {
+      pass('Local Demo Page (demo/sample-problem.html): Clean Before Shortcut, Extracted & Generated Solution Successfully');
     } else {
       fail('Local Demo Page Extraction', JSON.stringify(dVal));
     }
@@ -670,6 +709,121 @@ Output: [0,1]</pre>
 
     demoClient.close();
     await browserWs.send('Target.closeTarget', { targetId: demoTarget.targetId });
+
+    // 2.9 Test Local Demo Page (demo/rotate-array-sample.html): Dedicated Rotate Array by One Regression Test
+    const rotateFilePath = 'file:///' + path.join(PROJECT_ROOT, 'demo', 'rotate-array-sample.html').replace(/\\/g, '/');
+    const rotateTarget = await browserWs.send('Target.createTarget', { url: rotateFilePath });
+    await sleep(750);
+
+    targets = await fetchJson('http://127.0.0.1:9222/json/list');
+    const rotateTgtInfo = targets.find(t => t.id === rotateTarget.targetId);
+    const rotateClient = new CdpClient(rotateTgtInfo.webSocketDebuggerUrl);
+    await rotateClient.connect();
+    await rotateClient.send('Runtime.enable');
+
+    // Inject mock Chrome runtime APIs on rotate array page
+    await rotateClient.send('Runtime.evaluate', {
+      expression: `
+        window.chrome = {
+          storage: {
+            local: {
+              data: { geminiModel: 'gemini-2.5-flash' },
+              get: (keys) => Promise.resolve({ geminiModel: 'gemini-2.5-flash' }),
+              set: (obj) => Promise.resolve()
+            }
+          },
+          runtime: {
+            lastError: null,
+            sendMessage: (msg, cb) => {
+              if (msg.action === 'GENERATE_SOLUTION') {
+                setTimeout(() => {
+                  cb({
+                    success: true,
+                    code: 'class Solution {\\n  public:\\n    void rotate(vector<int> &arr) {\\n        if (arr.empty()) return;\\n        int last = arr.back();\\n        arr.pop_back();\\n        arr.insert(arr.begin(), last);\\n    }\\n};',
+                    model: 'gemini-2.5-flash'
+                  });
+                }, 150);
+              } else if (cb) {
+                cb({ success: true });
+              }
+            },
+            onMessage: {
+              addListener: (fn) => { window.__msgListener = fn; }
+            }
+          }
+        };
+      `
+    });
+
+    // Inject content.js into rotate-array-sample.html
+    await rotateClient.send('Runtime.evaluate', { expression: contentJsSource });
+    await sleep(500);
+
+    const rotateTest = await rotateClient.send('Runtime.evaluate', {
+      expression: `(async () => {
+        // Assert initial state: absolutely no overlay before shortcut
+        const rootBefore = document.getElementById('stealth-root');
+
+        // Trigger generation with Alt+Shift+G
+        window.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'G',
+          altKey: true,
+          shiftKey: true,
+          bubbles: true
+        }));
+
+        await new Promise(r => setTimeout(r, 400));
+
+        const root = document.getElementById('stealth-root');
+        const shadow = root ? root.shadowRoot : null;
+        const statusBadge = shadow?.getElementById('status-badge')?.textContent || '';
+        const codeView = shadow?.getElementById('code-view');
+        const rawCode = codeView?.getAttribute('data-raw-code') || '';
+        const renderedHtml = codeView?.innerHTML || '';
+
+        const forbiddenTokens = [
+          'Courses',
+          'Tutorials',
+          'Practice',
+          'Jobs',
+          'Difficulty',
+          'Rotate Array by One',
+          'Given an array arr[]'
+        ];
+
+        const statusViolations = forbiddenTokens.filter(token => statusBadge.includes(token));
+        const codeViolations = forbiddenTokens.filter(token => rawCode.includes(token) || renderedHtml.includes(token));
+
+        return {
+          wasNullBefore: rootBefore === null,
+          statusBadge,
+          rawCode,
+          statusViolations,
+          codeViolations,
+          hasRotateFunc: rawCode.includes('void rotate(vector<int> &arr)'),
+          hasClassSolution: rawCode.includes('class Solution')
+        };
+      })()`,
+      awaitPromise: true,
+      returnByValue: true
+    });
+
+    const rVal = rotateTest.result.value;
+    if (
+      rVal.wasNullBefore &&
+      rVal.hasClassSolution &&
+      rVal.hasRotateFunc &&
+      rVal.statusViolations.length === 0 &&
+      rVal.codeViolations.length === 0 &&
+      rVal.statusBadge === '⚡ C++17 Solution'
+    ) {
+      pass('Rotate Array by One Regression: Clean Before Shortcut, Overlay Contains ONLY Generated C++ Code, Strictly Zero Page/Nav/Difficulty Text');
+    } else {
+      fail('Rotate Array by One Regression', JSON.stringify(rVal));
+    }
+
+    rotateClient.close();
+    await browserWs.send('Target.closeTarget', { targetId: rotateTarget.targetId });
 
     pageClient.close();
     await browserWs.send('Target.closeTarget', { targetId: pageTarget.targetId });
