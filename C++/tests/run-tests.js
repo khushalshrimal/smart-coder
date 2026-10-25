@@ -298,7 +298,7 @@ async function mockCallGeminiApi({ apiKey, model, prompt, contents, fetchImpl, r
     });
   } catch (networkError) {
     if (networkError.name === 'AbortError' || networkError.message?.includes('timed out')) {
-      throw new Error('Connection timed out after 15 seconds. Google Gemini API did not respond in time.');
+      throw new Error('Connection timed out after 90 seconds. Google Gemini API did not respond in time.');
     }
     throw new Error(`Network failure: Unable to reach Google Gemini API (${networkError.message || 'offline'}).`);
   }
@@ -925,7 +925,7 @@ async function main() {
     );
   });
 
-  await runAsyncTest('Request timeout (15s bounded timeout with AbortController) is caught', async () => {
+  await runAsyncTest('Request timeout (90s bounded timeout with AbortController) is caught', async () => {
     const mockFetch = async () => {
       const err = new Error('The operation was aborted');
       err.name = 'AbortError';
@@ -936,7 +936,7 @@ async function main() {
       async () => {
         await mockCallGeminiApi({ apiKey: 'VALID_KEY', prompt: 'test', fetchImpl: mockFetch });
       },
-      /Connection timed out after 15 seconds/
+      /Connection timed out after 90 seconds/
     );
   });
 
@@ -1067,6 +1067,30 @@ async function main() {
     assert.ok(sw.includes('const DEFAULT_MAX_TOKENS = 8192;'), 'service-worker.js must define DEFAULT_MAX_TOKENS = 8192');
     assert.ok(html.includes('value="8192"'), 'settings.html max-tokens-input must default to 8192');
     assert.ok(js.includes('maxTokensInput.value = 8192;'), 'settings.js must default maxTokens to 8192');
+  });
+
+  runTest('Gemini API request timeout is configured to 90 seconds (90000ms) with AbortController and clearTimeout', () => {
+    const swPath = path.join(ROOT_DIR, 'service-worker.js');
+    const settingsJsPath = path.join(ROOT_DIR, 'settings.js');
+    const contentJsPath = path.join(ROOT_DIR, 'content.js');
+
+    const sw = fs.readFileSync(swPath, 'utf8');
+    const settingsJs = fs.readFileSync(settingsJsPath, 'utf8');
+    const contentJs = fs.readFileSync(contentJsPath, 'utf8');
+
+    // service-worker.js verification
+    assert.ok(sw.includes('90000'), 'service-worker.js must set timeout to 90000ms');
+    assert.ok(sw.includes('new AbortController()'), 'service-worker.js must instantiate AbortController');
+    assert.ok(sw.includes('clearTimeout(timeoutId)'), 'service-worker.js must clear timeout in finally block');
+    assert.ok(sw.includes('Connection timed out after 90 seconds'), 'service-worker.js must report 90 seconds timeout error');
+
+    // settings.js verification
+    assert.ok(settingsJs.includes('90000'), 'settings.js must set timeout to 90000ms');
+    assert.ok(settingsJs.includes('Connection Timed Out (90s Limit)'), 'settings.js must show 90s limit title');
+    assert.ok(settingsJs.includes('timed out after 90 seconds'), 'settings.js must report 90 seconds timeout message');
+
+    // content.js verification
+    assert.ok(contentJs.includes('Request timed out after 90 seconds'), 'content.js must display clear 90 seconds timeout in overlay');
   });
 
   await runAsyncTest('Network Failure throws clean descriptive offline message', async () => {

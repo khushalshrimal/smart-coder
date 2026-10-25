@@ -186,7 +186,7 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'QUOTA_EXCEEDED':
         return `Quota / Rate Limit Exceeded (HTTP ${httpStatus || 429})`;
       case 'TIMEOUT':
-        return 'Connection Timed Out (15s Limit)';
+        return 'Connection Timed Out (90s Limit)';
       case 'NETWORK_ERROR':
         return 'Network / Connectivity Failure';
       case 'SERVICE_WORKER_ERROR':
@@ -234,7 +234,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let timer;
     try {
-      // Step 1: Validate key with a real Gemini API call via service worker with bounded 15s timeout
+      // Step 1: Validate key with a real Gemini API call via service worker with bounded 90s timeout
       const requestPromise = new Promise((resolve) => {
         chrome.runtime.sendMessage(
           { action: 'TEST_CONNECTION', apiKey: rawKey, model },
@@ -262,11 +262,11 @@ document.addEventListener('DOMContentLoaded', () => {
         timer = setTimeout(() => {
           resolve({
             success: false,
-            error: 'Activation validation timed out after 15 seconds. Please check your network connection.',
+            error: 'Activation validation timed out after 90 seconds. Please check your network connection.',
             category: 'TIMEOUT',
             httpStatus: 0
           });
-        }, 15000);
+        }, 90000);
       });
 
       const testResponse = await Promise.race([requestPromise, timeoutPromise]);
@@ -408,11 +408,11 @@ document.addEventListener('DOMContentLoaded', () => {
         timer = setTimeout(() => {
           resolve({
             success: false,
-            error: 'Connection test timed out after 15 seconds. Please check your network connection.',
+            error: 'Connection test timed out after 90 seconds. Please check your network connection.',
             category: 'TIMEOUT',
             httpStatus: 0
           });
-        }, 15000);
+        }, 90000);
       });
 
       const response = await Promise.race([requestPromise, timeoutPromise]);

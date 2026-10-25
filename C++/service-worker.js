@@ -8,6 +8,7 @@ const DEFAULT_MODEL = 'gemini-2.5-flash';
 const DEFAULT_TEMPERATURE = 0.2;
 const DEFAULT_MAX_TOKENS = 8192;
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
+const GEMINI_REQUEST_TIMEOUT_MS = 90000; // 90 seconds (1 minute 30 seconds)
 
 /**
  * Structured error class containing diagnostic metadata for transparent UI feedback.
@@ -372,11 +373,11 @@ async function callGeminiApi({ apiKey, model, prompt, contents, temperature, max
     keyLength: cleanKey.length
   });
 
-  // 15-second bounded timeout with AbortController
+  // 90-second bounded timeout with AbortController (1 minute 30 seconds)
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
     controller.abort();
-  }, 15000);
+  }, GEMINI_REQUEST_TIMEOUT_MS);
 
   let response;
   try {
@@ -393,10 +394,10 @@ async function callGeminiApi({ apiKey, model, prompt, contents, temperature, max
   } catch (networkError) {
     if (networkError.name === 'AbortError' || controller.signal.aborted) {
       logDiagnostic('FETCH_TIMEOUT', { model: cleanModel });
-      throw new GeminiApiError('Connection timed out after 15 seconds. Google Gemini API did not respond in time.', {
+      throw new GeminiApiError('Connection timed out after 90 seconds. Google Gemini API did not respond in time.', {
         category: 'TIMEOUT',
         httpStatus: 0,
-        providerMessage: 'Request aborted after 15000ms',
+        providerMessage: 'Request aborted after 90000ms',
         stage: 'NETWORK_FETCH'
       });
     }

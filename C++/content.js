@@ -974,6 +974,8 @@
           updateStatus('KEY! Press Alt+Shift+A to configure', 'error');
         } else if (response.category === 'TOKEN_LIMIT_TRUNCATED' || errorText.includes('MAX_TOKENS') || errorText.includes('token limit')) {
           updateStatus('Error: Output truncated. Increase tokens in Settings', 'error');
+        } else if (response.category === 'TIMEOUT' || errorText.includes('timed out') || errorText.includes('TIMEOUT')) {
+          updateStatus('Error: Request timed out after 90 seconds', 'error');
         } else {
           updateStatus(`Error: ${errorText.substring(0, 50)}`, 'error');
         }
